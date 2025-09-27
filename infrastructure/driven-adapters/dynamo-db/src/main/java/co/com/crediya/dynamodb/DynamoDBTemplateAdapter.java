@@ -3,6 +3,10 @@ package co.com.crediya.dynamodb;
 import co.com.crediya.dynamodb.helper.TemplateAdapterOperations;
 import org.reactivecommons.utils.ObjectMapper;
 import org.springframework.stereotype.Repository;
+import co.com.crediya.model.report.Report;
+import co.com.crediya.model.report.gateways.ReportRepository;
+import lombok.extern.log4j.Log4j2;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedAsyncClient;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
@@ -13,31 +17,47 @@ import java.util.List;
 
 
 @Repository
-public class DynamoDBTemplateAdapter extends TemplateAdapterOperations<Object /*domain model*/, String, ModelEntity /*adapter model*/> /* implements Gateway from domain */ {
+@Slf4j
+public class DynamoDBTemplateAdapter extends TemplateAdapterOperations<Report, String, ReportEntity> implements
+        ReportRepository {
+
 
     public DynamoDBTemplateAdapter(DynamoDbEnhancedAsyncClient connectionFactory, ObjectMapper mapper) {
-        /**
-         *  Could be use mapper.mapBuilder if your domain model implement builder pattern
-         *  super(repository, mapper, d -> mapper.mapBuilder(d,ObjectModel.ObjectModelBuilder.class).build());
-         *  Or using mapper.map with the class of the object model
-         */
-        super(connectionFactory, mapper, d -> mapper.map(d, Object.class /*domain model*/), "table_name", "secondary_index" /*index is optional*/);
+        super(connectionFactory, mapper, d -> new Report(d.getReportAbout(), d.getQuantityApproved(), d.getTotalAmountApproved()), "report");
     }
 
-    public Mono<List<Object /*domain model*/>> getEntityBySomeKeys(String partitionKey, String sortKey) {
-        QueryEnhancedRequest queryExpression = generateQueryExpression(partitionKey, sortKey);
-        return query(queryExpression);
+    ReportEntity toEntityR(Report r) {
+        ReportEntity e = new ReportEntity();
+        e.setReportAbout(r.reportAbout());                 // <- CLAVE OBLIGATORIA
+        e.setQuantityApproved(r.quantityApproved());
+        e.setTotalAmountApproved(r.totalAmountApproved());
+        return e;
     }
 
-    public Mono<List<Object /*domain model*/>> getEntityBySomeKeysByIndex(String partitionKey, String sortKey) {
-        QueryEnhancedRequest queryExpression = generateQueryExpression(partitionKey, sortKey);
-        return queryByIndex(queryExpression, "secondary_index" /*index is optional if you define in constructor*/);
+    @Override
+    public Mono<Report> getReport(String id) {
+        return super.getById(id);
     }
 
-    private QueryEnhancedRequest generateQueryExpression(String partitionKey, String sortKey) {
-        return QueryEnhancedRequest.builder()
-                .queryConditional(QueryConditional.keyEqualTo(Key.builder().partitionValue(partitionKey).build()))
-                .queryConditional(QueryConditional.sortGreaterThanOrEqualTo(Key.builder().sortValue(sortKey).build()))
-                .build();
+    @Override
+    public Mono<Report> save(Report report) {
+        log.info(
+                "Guardando reporte con ID: {}, Cantidad Aprobada: {}, Monto Total Aprobado: {}",
+                report.reportAbout(), report.quantityApproved(),
+                report.totalAmountApproved());
+        ReportEntity e = toEntityR(report);
+        if (e.getReportAbout() == null || e.getReportAbout().isBlank()) {
+            return Mono.error(new IllegalArgumentException("reportAbout no puede ser null/blank"));
+        }
+        return super.save(report);
+    }
+
+    @Override
+    protected ReportEntity toEntity(Report model) {
+        ReportEntity entity = new ReportEntity();
+        entity.setReportAbout(model.reportAbout());
+        entity.setQuantityApproved(model.quantityApproved());
+        entity.setTotalAmountApproved(model.totalAmountApproved());
+        return entity;
     }
 }

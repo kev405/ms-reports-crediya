@@ -86,9 +86,7 @@ public abstract class TemplateAdapterOperations<E, K, V> {
         return Mono.from(pagePublisher).map(page -> page.items().stream().map(this::toModel).toList());
     }
 
-    protected V toEntity(E model) {
-        return mapper.map(model, dataClass);
-    }
+    protected abstract V toEntity(E model);
 
     protected E toModel(V data) {
         return data != null ? toEntityFn.apply(data) : null;
